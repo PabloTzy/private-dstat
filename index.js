@@ -1,12 +1,17 @@
+const express = require("express");
 const http = require("http");
-const fs = require("fs");
 const WebSocket = require("ws");
 const cluster = require("cluster");
 const os = require("os");
 const dgram = require('dgram');
 
 const cpus = os.cpus().length;
-const port = 21928;
+const port = process.env.PORT || 3000;
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server });
+
 const index = `<!DOCTYPE html>
 <html>
   <head>
@@ -95,7 +100,7 @@ const index = `<!DOCTYPE html>
       };
     </script>
   </body>
-</html>`
+</html>`;
 
 if (cluster.isMaster) {
   console.log(`Number of CPUs is ${cpus}`);
@@ -103,6 +108,7 @@ if (cluster.isMaster) {
 
   let requests = 0;
   let childs = [];
+
   for (let i = 0; i < cpus; i++) {
     let child = cluster.fork();
     child.on("message", (msg) => {
@@ -128,7 +134,7 @@ if (cluster.isMaster) {
       res.end(index);
     }
   };
-  
+
   const udpServer = dgram.createSocket('udp4');
 
   udpServer.on('message', (msg, rinfo) => {
@@ -137,12 +143,11 @@ if (cluster.isMaster) {
 
   udpServer.bind(53);
 
-  const server = http.createServer(handler);
-  const wss = new WebSocket.Server({ server });
-
   process.on("message", (requests) => {
     wss.clients.forEach((client) => client.send(requests));
   });
 
-  server.listen(port);
+  server.listen(port, () => {
+    console.log(`Worker ${process.pid} is listening on port ${port}`);
+  });
 }
